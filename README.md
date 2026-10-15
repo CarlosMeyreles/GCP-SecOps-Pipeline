@@ -8,7 +8,6 @@
 
 ![A detection row in BigQuery with its human-readable alert_message](screenshots/12-detection-row-bigquery.PNG)
 
-> [ACTION: Decide whether to stack the two hero screenshots above or place them side by side in an HTML table. Stacked is the safest rendering.]
 
 ## Executive Summary
 
