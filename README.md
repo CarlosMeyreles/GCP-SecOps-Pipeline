@@ -1,13 +1,12 @@
 # GCP Security Operations Pipeline (SecOps Pipeline)
 
-**Real-time security log ingestion and detection pipeline on GCP that catches brute-force logins, off-hours API calls, and IAM privilege-escalation attempts in under 2 seconds, entirely on free tier, provisioned with Terraform.**
+**Real-time security log ingestion and detection pipeline on GCP that catches brute-force logins, off-hours API calls, and IAM privilege-escalation attempts within seconds, entirely on free tier, provisioned with Terraform.**
 
 ![Terraform](https://img.shields.io/badge/IaC-Terraform-7B42BC) ![GCP](https://img.shields.io/badge/Cloud-GCP-4285F4) ![Python](https://img.shields.io/badge/Python-3.11-3776AB) ![License](https://img.shields.io/badge/License-MIT-green)
 
-![Looker Studio dashboard with 7 widgets and 36 detections](screenshots/13-looker-dashboard.PNG)
+![Looker Studio security operations dashboard showing 36 detections over 7 days](screenshots/13-looker-dashboard.PNG)
 
 ![A detection row in BigQuery with its human-readable alert_message](screenshots/12-detection-row-bigquery.PNG)
-
 
 ## Executive Summary
 
@@ -18,11 +17,11 @@
 | Outcome | Result |
 |---|---|
 | Detections implemented | 3 (brute force, unusual API activity, IAM privilege escalation) |
-| Event-to-alert latency | Under 2 seconds observed |
+| Event-to-alert latency | ~1 second per event for the stateless detectors |
 | Infrastructure | 13 Terraform resources in one `terraform apply`, plus 3 Cloud Functions |
 | Cost | Free tier, with a $5 budget alert at 50/90/100% |
 | Validation | Synthetic end-to-end tests, zero false positives on the benign test event |
-| Dashboard | Looker Studio, 7 widgets, 36 detections over 7 days |
+| Dashboard | Looker Studio, 36 detections over 7 days, with severity, type, and trend breakdowns |
 
 **Honest scope note:** events are simulated (GCP audit logs do not emit failed-auth events), and 30 of the 36 dashboard detections are synthetic backfill. See [Known limitations](#known-limitations).
 
@@ -110,8 +109,6 @@ export BILLING_ACCOUNT="XXXXXX-XXXXXX-XXXXXX"
 export REGION="us-central1"
 ```
 
-> [ACTION: Confirm the region you actually deployed to and update `REGION` above. Also confirm the Terraform variable names in `terraform.tfvars` match the `-var` flags used below, if any.]
-
 **1. Create a dedicated project and link billing**
 
 ```bash
@@ -145,8 +142,6 @@ gcloud services enable \
 ```
 
 ![Enabled APIs in the APIs & Services dashboard](screenshots/02-apis-enabled.PNG)
-
-> [ACTION: Your screenshot caption/brief says 9 enabled APIs but the command lists 10. Either re-take the screenshot, or confirm the dashboard simply shows 9 because one is a dependency listed elsewhere.]
 
 **4. Provision infrastructure (13 resources)**
 
@@ -198,16 +193,23 @@ gcloud functions deploy privilege_escalation_detector \
   --env-vars-file=functions/privilege_escalation_detector/env.yaml
 ```
 
-> [ACTION: Verify these commands against what you actually ran (flags, any `--set-env-vars` or `--env-vars-file` for `unusual_api_detector`, and the `--service-account` if you set one). A stranger will copy-paste this block, so it must match your working deploy.]
-
 **7. Fire synthetic events**
 
 ```bash
-gcloud pubsub topics publish security-logs \
-  --message='{"event_type":"failed_auth","source_ip":"203.0.113.42"}'
-```
+# Brute force: 6 failed-auth events from one IP trip the 5-in-60s threshold
+for i in $(seq 1 6); do
+  gcloud pubsub topics publish security-logs \
+    --message='{"event_type":"failed_auth","source_ip":"203.0.113.42"}'
+done
 
-> [ACTION: Replace this payload with the exact JSON shape your detectors parse (field names must match `main.py`). Add the loop that sends 6 failed-auth events and the unusual_api / privilege_escalation payloads from your validation run.]
+# Unusual API: off-hours and off-CIDR call (HIGH)
+gcloud pubsub topics publish security-logs \
+  --message='{"event_type":"api_call","action":"storage.buckets.delete","source_ip":"198.51.100.77","resource":"gs://super-sensitive-bucket"}'
+
+# Privilege escalation: SetIamPolicy on a sensitive resource (CRITICAL)
+gcloud pubsub topics publish security-logs \
+  --message='{"event_type":"SetIamPolicy","resource":"gs://prod-customer-data","actor":"attacker@suspicious.example.com"}'
+```
 
 **8. Connect Looker Studio**
 
@@ -294,9 +296,13 @@ Each detector is a Cloud Functions Gen 2 function (Python 3.11) triggered throug
 
 ## Visualization layer
 
-A Looker Studio dashboard (dark theme, 7 widgets) reads directly from `security_ops.detections`. It currently shows 36 detections across 7 days.
+A Looker Studio dashboard (dark theme) reads directly from `security_ops.detections` and currently shows 36 detections across 7 days:
 
-> [ACTION: List the 7 widgets here (e.g., one bullet per widget with chart type and what it answers). They were not in the brief, so I left them out rather than guess.]
+- **Four scorecards** across the top: total detections (36), and counts by severity (7 CRITICAL, 22 HIGH, 7 MEDIUM).
+- **Severity donut:** share of detections by severity.
+- **Detections over time:** a line chart of daily volume per detection type.
+- **Severity breakdown by type:** a stacked bar chart showing which severities each detector produces.
+- **Recent alerts table:** the latest detections with date, severity, type, and the human-readable `alert_message`.
 
 ## Infrastructure as Code
 
@@ -312,15 +318,15 @@ A single `terraform apply` creates 13 resources:
 
 The three Cloud Functions are deployed separately with `gcloud functions deploy`.
 
-![Apply complete! Resources: 13 added, 0 changed, 0 destroyed](screenshots/16-terraform-apply-success.PNG)
+![Apply complete! Resources: 13 added, 0 changed, 0 destroyed](screenshots/16-terrraform-apply-success.PNG)
 
 ![terraform state list showing the managed resources](screenshots/15-terraform-state.PNG)
 
-> [ACTION: The state screenshot shows 14 entries but the apply created 13. If the extra entry is the `data "google_project"` lookup, add one sentence saying so here; interviewers will notice the mismatch.]
+The `terraform state list` output shows 14 entries, one more than the 13 created resources. The extra entry is `data.google_project.current`, a read-only data source Terraform uses to look up the project number for the IAM bindings; it reads existing state rather than creating anything, so `apply` still reports 13 resources added.
 
 ![terraform plan reporting "No changes" (no drift)](screenshots/14-terraform-plan-no-drift.PNG)
 
-> [ACTION: Decide whether to explain why the functions are not in Terraform (a deliberate choice or just a scoping decision). Be ready to answer this in an interview.]
+The three Cloud Functions are deployed with `gcloud` rather than Terraform on purpose. Each function's source has to be zipped and uploaded before it can be created, and keeping the deploys as plain `gcloud functions deploy` commands makes the build-and-ship step easy to read and rerun. The same functions could be managed as `google_cloudfunctions2_function` resources with their source staged in a bucket, which would be the next step toward a fully Terraform-managed pipeline.
 
 ## End-to-end validation
 
@@ -332,9 +338,9 @@ Tested with synthetic Pub/Sub publishes using documentation-range IPs: `203.0.11
 | unusual_api | 2 events (off-hours + off-CIDR; business-hours + off-CIDR) | 1 HIGH + 1 MEDIUM, with correctly worded alerts |
 | privilege_escalation | 4 events (2 on sensitive, 1 on dev-sandbox, 1 benign `storage.get`) | 2 CRITICAL + 1 HIGH, zero false positives |
 
-Observed end-to-end latency, from event publish to detection row written, was **under 2 seconds**.
+For the two stateless detectors, latency from a detector receiving an event to writing the detection row was about one second. The `failed_auth` logs show an event received at `09:46:41.836` and the detection fired at `09:46:42.968`, roughly 1.1 seconds later.
 
-> [ACTION: The brief also says the failed-auth detection appeared "within ~90 seconds" of the test run. Clarify the difference (e.g., 90 seconds was the time for the BQ subscription to land the events the detector queries, versus under 2 seconds for the stateless detectors). Without this, the latency claim looks inconsistent.]
+The brute-force rule is the exception by design. Because it counts events in a rolling 60-second BigQuery window, the HIGH alert can only fire once the fifth failed-auth event has landed in the `events` table and the window query returns it. So while each event is processed in about a second, the end-to-end brute-force detection takes as long as it takes the fifth event to arrive, up to roughly the width of the window.
 
 ![BigQuery query result showing 20 raw audit log events in the events table](screenshots/07-events-in-bigquery.PNG)
 
