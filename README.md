@@ -86,7 +86,7 @@ The pipeline has four layers:
 3. **Detection:** three Cloud Functions subscribed to the topic write to the `detections` table.
 4. **Visualization:** a Looker Studio dashboard reads from `detections`.
 
-![BigQuery Explorer showing the security_ops dataset with events and detections tables](screenshots/05-bigquery-dataset-schema.png)
+![BigQuery Explorer showing the security_ops dataset with events and detections tables](screenshots/05-bigquery-dataset-schema.PNG)
 
 ## Tech stack
 
@@ -133,7 +133,7 @@ gcloud billing budgets create \
   --threshold-rule=percent=1.0
 ```
 
-![$5 budget alert with 50/90/100% thresholds in the GCP Billing console](screenshots/01-budget-alert-created.png)
+![$5 budget alert with 50/90/100% thresholds in the GCP Billing console](screenshots/01-budget-alert-created.PNG)
 
 **3. Enable the 10 required APIs**
 
@@ -145,7 +145,7 @@ gcloud services enable \
   compute.googleapis.com cloudresourcemanager.googleapis.com
 ```
 
-![Enabled APIs in the APIs & Services dashboard](screenshots/02-apis-enabled.png)
+![Enabled APIs in the APIs & Services dashboard](screenshots/02-apis-enabled.PNG)
 
 > [ACTION: Your screenshot caption/brief says 9 enabled APIs but the command lists 10. Either re-take the screenshot, or confirm the dashboard simply shows 9 because one is a dependency listed elsewhere.]
 
@@ -224,15 +224,15 @@ Create a new data source in Looker Studio, choose the BigQuery connector, and se
 
 Three Cloud Logging sinks (audit, VPC flow, firewall) route filtered logs to a single Pub/Sub topic named `security-logs`. Each sink is created with `unique_writer_identity = true`, and Terraform explicitly grants each sink's writer identity `roles/pubsub.publisher` on the topic through three `google_pubsub_topic_iam_member` resources. Omitting that grant is a common cause of logs silently never arriving.
 
-![Log Router showing the three sinks routing to Pub/Sub](screenshots/06-log-sinks.png)
+![Log Router showing the three sinks routing to Pub/Sub](screenshots/06-log-sinks.PNG)
 
-![The security-logs Pub/Sub topic in the Pub/Sub console](screenshots/03-pubsub-topic-created.png)
+![The security-logs Pub/Sub topic in the Pub/Sub console](screenshots/03-pubsub-topic-created.PNG)
 
 ## Storage layer
 
 A Pub/Sub BigQuery subscription (`security-logs-to-bq`, `write_metadata = true`) writes every message into the `events` table with no custom code. The Pub/Sub managed service account is granted `roles/bigquery.dataEditor` and `roles/bigquery.metadataViewer` at project level. Both tables are day-partitioned in the `security_ops` dataset (US multi-region).
 
-![BigQuery subscription detail page with the "Write to BigQuery" delivery type](screenshots/04-pubsub-bq-subscription.png)
+![BigQuery subscription detail page with the "Write to BigQuery" delivery type](screenshots/04-pubsub-bq-subscription.PNG)
 
 **`events`: raw landing zone**
 
@@ -266,9 +266,9 @@ Each detector is a Cloud Functions Gen 2 function (Python 3.11) triggered throug
 - **Idempotency:** UUID5 from `(ip + minute-bucket)` collapses repeat firings.
 - **Config:** `FAILED_AUTH_THRESHOLD` (default 5), `WINDOW_SECONDS` (default 60).
 
-![failed_auth_detector Cloud Run service page with request metrics](screenshots/08-function-failed-auth-deployed.png)
+![failed_auth_detector Cloud Run service page with request metrics](screenshots/08-function-failed-auth-deployed.PNG)
 
-![Logs showing the sequence Processing, Found 5, DETECTION FIRED](screenshots/11-detection-fired-logs.png)
+![Logs showing the sequence Processing, Found 5, DETECTION FIRED](screenshots/11-detection-fired-logs.PNG)
 
 ### 2. `unusual_api_detector`
 
@@ -279,7 +279,7 @@ Each detector is a Cloud Functions Gen 2 function (Python 3.11) triggered throug
 - **Config:** `BUSINESS_TZ` (America/New_York), `BUSINESS_HOUR_START` (8), `BUSINESS_HOUR_END` (18), `ALLOWED_CIDRS` (default RFC 1918 ranges).
 - **Stdlib:** `zoneinfo` for DST-safe time handling and `ipaddress` for CIDR membership.
 
-![unusual_api_detector logs showing DETECTION FIRED [HIGH] and [MEDIUM]](screenshots/09-function-unusual-api-deployed.png)
+![unusual_api_detector logs showing DETECTION FIRED [HIGH] and [MEDIUM]](screenshots/09-function-unusual-api-deployed.PNG)
 
 ### 3. `privilege_escalation_detector`
 
@@ -291,7 +291,7 @@ Each detector is a Cloud Functions Gen 2 function (Python 3.11) triggered throug
 - **Config:** `SENSITIVE_PREFIXES` (semicolon-separated).
 - **Design note:** in production, sensitivity would come from GCP resource tags enforced via Org Policy. The detector would only read tags, not define sensitivity.
 
-![privilege_escalation_detector logs showing [CRITICAL] and [HIGH] lines](screenshots/10-function-privilege-escalation-deployed.png)
+![privilege_escalation_detector logs showing [CRITICAL] and [HIGH] lines](screenshots/10-function-privilege-escalation-deployed.PNG)
 
 ## Visualization layer
 
@@ -313,13 +313,13 @@ A single `terraform apply` creates 13 resources:
 
 The three Cloud Functions are deployed separately with `gcloud functions deploy`.
 
-![Apply complete! Resources: 13 added, 0 changed, 0 destroyed](screenshots/16-terraform-apply-success.png)
+![Apply complete! Resources: 13 added, 0 changed, 0 destroyed](screenshots/16-terraform-apply-success.PNG)
 
-![terraform state list showing the managed resources](screenshots/15-terraform-state.png)
+![terraform state list showing the managed resources](screenshots/15-terraform-state.PNG)
 
 > [ACTION: The state screenshot shows 14 entries but the apply created 13. If the extra entry is the `data "google_project"` lookup, add one sentence saying so here; interviewers will notice the mismatch.]
 
-![terraform plan reporting "No changes" (no drift)](screenshots/14-terraform-plan-no-drift.png)
+![terraform plan reporting "No changes" (no drift)](screenshots/14-terraform-plan-no-drift.PNG)
 
 > [ACTION: Decide whether to explain why the functions are not in Terraform (a deliberate choice or just a scoping decision). Be ready to answer this in an interview.]
 
@@ -337,7 +337,7 @@ Observed end-to-end latency, from event publish to detection row written, was **
 
 > [ACTION: The brief also says the failed-auth detection appeared "within ~90 seconds" of the test run. Clarify the difference (e.g., 90 seconds was the time for the BQ subscription to land the events the detector queries, versus under 2 seconds for the stateless detectors). Without this, the latency claim looks inconsistent.]
 
-![BigQuery query result showing 20 raw audit log events in the events table](screenshots/07-events-in-bigquery.png)
+![BigQuery query result showing 20 raw audit log events in the events table](screenshots/07-events-in-bigquery.PNG)
 
 ## Design decisions
 
