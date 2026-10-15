@@ -4,9 +4,9 @@
 
 ![Terraform](https://img.shields.io/badge/IaC-Terraform-7B42BC) ![GCP](https://img.shields.io/badge/Cloud-GCP-4285F4) ![Python](https://img.shields.io/badge/Python-3.11-3776AB) ![License](https://img.shields.io/badge/License-MIT-green)
 
-![Looker Studio dashboard with 7 widgets and 36 detections](screenshots/13-looker-dashboard.png)
+![Looker Studio dashboard with 7 widgets and 36 detections](screenshots/13-looker-dashboard.PNG)
 
-![A detection row in BigQuery with its human-readable alert_message](screenshots/12-detection-row-bigquery.png)
+![A detection row in BigQuery with its human-readable alert_message](screenshots/12-detection-row-bigquery.PNG)
 
 > [ACTION: Decide whether to stack the two hero screenshots above or place them side by side in an HTML table. Stacked is the safest rendering.]
 
